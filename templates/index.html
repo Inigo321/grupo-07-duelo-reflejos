@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Duelo de Reflejos</title>
+<style>
+  body { font-family: system-ui, sans-serif; background:#16181d; color:#e8e8e8; margin:0; padding:20px; }
+  h1 { margin:0 0 16px; font-size:1.6rem; }
+  .fila { display:flex; gap:16px; flex-wrap:wrap; }
+  .tarjeta { background:#22252c; border-radius:10px; padding:16px; flex:1; min-width:260px; }
+  #fase { font-size:2.2rem; font-weight:700; text-align:center; padding:28px; border-radius:10px; background:#2c3038; transition:background .1s; }
+  #fase.YA { background:#1f9d55; } #fase.ESPERA { background:#b7791f; }
+  #fase.CUENTA_ATRAS { background:#2b6cb0; } #fase.RESULTADO { background:#6b46c1; }
+  #mensaje { text-align:center; margin-top:10px; font-size:1.1rem; }
+  .marcador { display:flex; justify-content:space-around; font-size:1.2rem; text-align:center; }
+  .marcador b { display:block; font-size:2.6rem; }
+  button { background:#3b82f6; color:#fff; border:0; border-radius:8px; padding:10px 16px; font-size:1rem; cursor:pointer; margin:4px; }
+  button.gris { background:#4a5060; } button.sim { background:#c05621; }
+  table { width:100%; border-collapse:collapse; font-size:.95rem; }
+  th, td { padding:6px; border-bottom:1px solid #333; text-align:center; }
+  .stats td { text-align:left; }
+</style>
+</head>
+<body>
+<h1>⚡ Duelo de Reflejos</h1>
+<div class="fila">
+  <div class="tarjeta" style="flex:2">
+    <div id="fase">—</div>
+    <div id="mensaje"></div>
+    <div style="text-align:center; margin-top:12px">
+      <button onclick="post('/api/iniciar')">Iniciar ronda</button>
+      <button class="gris" onclick="post('/api/reiniciar')">Reiniciar marcador</button>
+      {% if simulado %}
+      <br><button class="sim" onclick="post('/api/simular/1')">Simular pulsador 1</button>
+      <button class="sim" onclick="post('/api/simular/2')">Simular pulsador 2</button>
+      {% endif %}
+    </div>
+  </div>
+  <div class="tarjeta">
+    <h3>Marcador de la sesión</h3>
+    <div class="marcador">
+      <div>{{ nombres[1] }}<b id="m1">0</b></div>
+      <div>{{ nombres[2] }}<b id="m2">0</b></div>
+    </div>
+    <h3>Estadísticas (todas las rondas)</h3>
+    <table class="stats">
+      <tr><td>Media {{ nombres[1] }}</td><td id="media1">-</td></tr>
+      <tr><td>Media {{ nombres[2] }}</td><td id="media2">-</td></tr>
+      <tr><td>Récord {{ nombres[1] }}</td><td id="mejor1">-</td></tr>
+      <tr><td>Récord {{ nombres[2] }}</td><td id="mejor2">-</td></tr>
+      <tr><td>Rondas jugadas</td><td id="total">0</td></tr>
+    </table>
+  </div>
+</div>
+<div class="tarjeta" style="margin-top:16px">
+  <h3>Últimas rondas</h3>
+  <table>
+    <thead><tr><th>Fecha</th><th>Ganador</th><th>{{ nombres[1] }} (ms)</th><th>{{ nombres[2] }} (ms)</th><th>Falsa salida</th></tr></thead>
+    <tbody id="historial"></tbody>
+  </table>
+</div>
+<script>
+const NOMBRES = {1: "{{ nombres[1] }}", 2: "{{ nombres[2] }}"};
+const TEXTO_FASE = {ESPERANDO:"En espera", CUENTA_ATRAS:"Preparados", ESPERA:"Atentos...", YA:"¡YA!", RESULTADO:"Resultado"};
+const ms = v => (v === null || v === undefined) ? "-" : v + " ms";
+
+function post(url) { fetch(url, {method: "POST"}); }
+
+let fasePrevia = null;
+async function actualizarEstado() {
+  try {
+    const e = await (await fetch("/api/estado")).json();
+    const f = document.getElementById("fase");
+    f.className = e.fase || ""; f.textContent = TEXTO_FASE[e.fase] || "—";
+    document.getElementById("mensaje").textContent = e.mensaje || "";
+    document.getElementById("m1").textContent = e.marcador_j1 ?? 0;
+    document.getElementById("m2").textContent = e.marcador_j2 ?? 0;
+    if (e.fase === "RESULTADO" && fasePrevia !== "RESULTADO") setTimeout(actualizarHistorial, 300);
+    fasePrevia = e.fase;
+  } catch (err) {}
+}
+
+async function actualizarHistorial() {
+  try {
+    const d = await (await fetch("/api/historial")).json();
+    document.getElementById("media1").textContent = ms(d.stats.media_j1);
+    document.getElementById("media2").textContent = ms(d.stats.media_j2);
+    document.getElementById("mejor1").textContent = ms(d.stats.mejor_j1);
+    document.getElementById("mejor2").textContent = ms(d.stats.mejor_j2);
+    document.getElementById("total").textContent = d.stats.total;
+    document.getElementById("historial").innerHTML = d.ultimas.map(r =>
+      `<tr><td>${r.fecha}</td><td>${r.ganador ? NOMBRES[r.ganador] : "-"}</td>
+       <td>${r.tiempo_j1 ?? "-"}</td><td>${r.tiempo_j2 ?? "-"}</td>
+       <td>${r.falsa_salida ? NOMBRES[r.falsa_salida] : ""}</td></tr>`).join("");
+  } catch (err) {}
+}
+
+setInterval(actualizarEstado, 200);
+actualizarHistorial();
+</script>
+</body>
+</html>

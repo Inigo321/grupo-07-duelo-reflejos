@@ -1,13 +1,13 @@
 """Prueba rápida del cableado ANTES de lanzar el proyecto.
 
-Cada LED parpadea 2 veces y después, durante 20 s, al pulsar un botón se
-enciende su LED. Si no funciona, revisa los pines de config.py.
+Cada LED parpadea 2 veces, el zumbador pita 2 veces y después, durante 20 s,
+al pulsar un botón se enciende su LED. Si no funciona, revisa los pines de config.py.
 
 Ejecutar:  python3 prueba_hardware.py
 """
 import time
 
-from gpiozero import LED, Button
+from gpiozero import LED, Button, Buzzer
 
 import config
 
@@ -18,6 +18,11 @@ botones = {1: Button(config.J1_BOTON, pull_up=True, bounce_time=config.REBOTE),
 for j in (1, 2):
     print(f"LED del jugador {j} (GPIO{leds[j].pin.number}) parpadeando...")
     leds[j].blink(on_time=0.3, off_time=0.3, n=2, background=False)
+
+if config.ZUMBADOR is not None:
+    zumbador = Buzzer(config.ZUMBADOR)
+    print(f"Zumbador (GPIO{config.ZUMBADOR}) pitando...")
+    zumbador.beep(on_time=0.1, off_time=0.3, n=2, background=False)
 
 print("Pulsa los botones durante 20 s (cada uno enciende su LED)")
 fin = time.time() + 20

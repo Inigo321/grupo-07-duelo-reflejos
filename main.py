@@ -1,7 +1,7 @@
-"""Duelo de Reflejos - programa principal.
+"""Duelo de Memoria - programa principal.
 
 Crea los objetos compartidos y lanza los 3 procesos:
-  P1 juego    (hardware + lógica, con 4 hilos)
+  P1 juego    (hardware + lógica, con 5 hilos)
   P2 web      (Flask)
   P3 registro (SQLite)
 
@@ -15,7 +15,7 @@ from multiprocessing.managers import SyncManager
 
 import config
 from juego import proceso_juego
-from registro import crear_bd, proceso_registro
+from registro import crear_bd, leer_records, proceso_registro
 from web import proceso_web
 
 
@@ -37,6 +37,7 @@ def main():
     gestor = SyncManager()
     gestor.start(signal.signal, (signal.SIGINT, signal.SIG_IGN))
     estado = gestor.dict()           # estado del juego (lo escribe P1, lo lee P2)
+    estado["records"] = leer_records()  # récords de cada modo guardados en la BD
     cerrojo_estado = mp.Lock()       # protege lecturas/escrituras de varias claves
     cola_comandos = mp.Queue()       # P2 (web) -> P1 (juego)
     cola_resultados = mp.Queue()     # P1 (juego) -> P3 (registro)

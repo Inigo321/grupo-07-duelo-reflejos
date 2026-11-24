@@ -1,4 +1,4 @@
-"""PROCESO 2: servidor web Flask (dashboard en tiempo real).
+"""PROCESO 2: servidor web Flask (dashboard en tiempo real del Duelo de Memoria).
 
 Lee el estado del juego del diccionario compartido (con cerrojo), lee el
 histórico de la base de datos y envía órdenes al juego por una cola.
@@ -23,26 +23,31 @@ def crear_app(estado, cerrojo_estado, cola_comandos):
 
     @app.route("/")
     def inicio():
-        return render_template("index.html", nombres=config.NOMBRES, simulado=config.SIMULADO)
+        return render_template("index.html", nombres=config.NOMBRES, modos=config.MODOS,
+                               simulado=config.SIMULADO)
 
     @app.route("/api/estado")
     def api_estado():
         with cerrojo_estado:              # copia coherente del estado compartido
-            actual = dict(estado)
+            actual = estado.copy()        # un solo mensaje al Manager
         return jsonify(actual)
 
     @app.route("/api/historial")
     def api_historial():
-        ultimas = consultar("SELECT * FROM rondas ORDER BY id DESC LIMIT 10")
+        ultimas = consultar("SELECT * FROM partidas ORDER BY id DESC LIMIT 10")
         stats = consultar(
             "SELECT "
-            " (SELECT ROUND(AVG(tiempo_j1),1) FROM rondas) AS media_j1,"
-            " (SELECT ROUND(AVG(tiempo_j2),1) FROM rondas) AS media_j2,"
-            " (SELECT MIN(tiempo_j1) FROM rondas) AS mejor_j1,"
-            " (SELECT MIN(tiempo_j2) FROM rondas) AS mejor_j2,"
-            " (SELECT COUNT(*) FROM rondas) AS total"
+            " ROUND(AVG(longitud), 1) AS media_longitud,"
+            " SUM(fallo = 1) AS fallos_j1,"
+            " SUM(fallo = 2) AS fallos_j2,"
+            " ROUND(AVG(media_j1), 1) AS media_j1,"
+            " ROUND(AVG(media_j2), 1) AS media_j2,"
+            " COUNT(*) AS total"
+            " FROM partidas"
         )[0]
-        return jsonify(ultimas=ultimas, stats=stats)
+        records = {f["modo"]: f["record"] for f in consultar(
+            "SELECT modo, MAX(longitud) AS record FROM partidas GROUP BY modo")}
+        return jsonify(ultimas=ultimas, stats=stats, records=records)
 
     @app.route("/api/iniciar", methods=["POST"])
     def api_iniciar():
@@ -52,6 +57,13 @@ def crear_app(estado, cerrojo_estado, cola_comandos):
     @app.route("/api/reiniciar", methods=["POST"])
     def api_reiniciar():
         cola_comandos.put("reiniciar_marcador")
+        return jsonify(ok=True)
+
+    @app.route("/api/modo/<nombre>", methods=["POST"])
+    def api_modo(nombre):
+        if nombre not in config.MODOS:
+            return jsonify(ok=False), 400
+        cola_comandos.put(f"modo:{nombre}")  # el juego lo aplica al acabar la partida en curso
         return jsonify(ok=True)
 
     @app.route("/api/simular/<int:jugador>", methods=["POST"])
